@@ -8,11 +8,15 @@ interface FormatContext {
     startLine: number;
     endLine: number;
     document: vscode.TextDocument;
+    symbol?: string;
 }
 
-function getConfig(): { format: RefFormat } {
+function getConfig(): { format: RefFormat; includeSymbol: boolean } {
     const cfg = vscode.workspace.getConfiguration('copyLineRef');
-    return { format: cfg.get<RefFormat>('format', 'simple') };
+    return {
+        format: cfg.get<RefFormat>('format', 'simple'),
+        includeSymbol: cfg.get<boolean>('includeSymbol', false),
+    };
 }
 
 function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine: number): string | null {
@@ -39,14 +43,16 @@ function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine:
     return `https://github.com/${repoPath}/blob/${branch}/${relative}#${lineFragment}`;
 }
 
-function formatRef({ fileRef, startLine, endLine, document }: FormatContext): string {
+function formatRef({ fileRef, startLine, endLine, document, symbol }: FormatContext): string {
     const { format } = getConfig();
-    const simple = startLine === endLine
-        ? `${fileRef}:${startLine}`
-        : `${fileRef}:${startLine}-${endLine}`;
+    const lineStr = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
+    const symbolSuffix = symbol ? `::${symbol}` : '';
+    const simple = `${fileRef}:${lineStr}${symbolSuffix}`;
 
     if (format === 'github') {
-        return getGitHubUrl(document, startLine, endLine) ?? simple;
+        // Symbol suffix appended after the URL fragment for readability.
+        const url = getGitHubUrl(document, startLine, endLine);
+        return url ? `${url}${symbolSuffix}` : simple;
     }
     if (format === 'markdown-link') {
         return `[${simple}](./${fileRef})`;
@@ -83,6 +89,32 @@ function uniqueRefs(refs: string[]): string[] {
     return refs.filter((r, i) => refs.indexOf(r) === i);
 }
 
+/**
+ * Walk the document symbol tree to find the innermost symbol whose range
+ * contains the given (0-based) line.
+ */
+function findInnermostSymbol(
+    symbols: vscode.DocumentSymbol[],
+    line: number
+): vscode.DocumentSymbol | undefined {
+    for (const sym of symbols) {
+        if (sym.range.start.line <= line && line <= sym.range.end.line) {
+            const child = findInnermostSymbol(sym.children, line);
+            return child ?? sym;
+        }
+    }
+    return undefined;
+}
+
+async function resolveSymbol(document: vscode.TextDocument, line: number): Promise<string | undefined> {
+    const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        'vscode.executeDocumentSymbolProvider',
+        document.uri
+    );
+    if (!symbols?.length) { return undefined; }
+    return findInnermostSymbol(symbols, line)?.name;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('copyLineRef.copyReference', async () => {
@@ -90,13 +122,19 @@ export function activate(context: vscode.ExtensionContext): void {
             if (!editor) { return; }
 
             const fileRef = getFileRef(editor.document);
+            const { includeSymbol } = getConfig();
 
             // Support multi-cursor / multi-selection.
             const refs = uniqueRefs(
-                editor.selections.map(sel => {
-                    const { startLine, endLine } = getLineRange(sel);
-                    return formatRef({ fileRef, startLine, endLine, document: editor.document });
-                })
+                await Promise.all(
+                    editor.selections.map(async sel => {
+                        const { startLine, endLine } = getLineRange(sel);
+                        const symbol = includeSymbol
+                            ? await resolveSymbol(editor.document, sel.start.line)
+                            : undefined;
+                        return formatRef({ fileRef, startLine, endLine, document: editor.document, symbol });
+                    })
+                )
             );
             const reference = refs.join(', ');
 
@@ -110,21 +148,27 @@ export function activate(context: vscode.ExtensionContext): void {
 
             const fileRef = getFileRef(editor.document);
             const lang = getLanguageId(editor.document);
+            const { includeSymbol } = getConfig();
 
             // For multiple selections, emit one fenced block per selection.
             const seen = new Set<string>();
-            const blocks = editor.selections
-                .map(sel => {
-                    const { startLine, endLine } = getLineRange(sel);
-                    const ref = formatRef({ fileRef, startLine, endLine, document: editor.document });
-                    if (seen.has(ref)) { return null; }
-                    seen.add(ref);
-                    const code = editor.document.getText(
-                        new vscode.Range(sel.start.line, 0, sel.end.line, sel.end.character)
-                    );
-                    return `${ref}\n\`\`\`${lang}\n${code}\n\`\`\``;
-                })
-                .filter((b): b is string => b !== null);
+            const blocks = (
+                await Promise.all(
+                    editor.selections.map(async sel => {
+                        const { startLine, endLine } = getLineRange(sel);
+                        const symbol = includeSymbol
+                            ? await resolveSymbol(editor.document, sel.start.line)
+                            : undefined;
+                        const ref = formatRef({ fileRef, startLine, endLine, document: editor.document, symbol });
+                        if (seen.has(ref)) { return null; }
+                        seen.add(ref);
+                        const code = editor.document.getText(
+                            new vscode.Range(sel.start.line, 0, sel.end.line, sel.end.character)
+                        );
+                        return `${ref}\n\`\`\`${lang}\n${code}\n\`\`\``;
+                    })
+                )
+            ).filter((b): b is string => b !== null);
 
             const output = blocks.join('\n\n');
             const summary = blocks.length === 1

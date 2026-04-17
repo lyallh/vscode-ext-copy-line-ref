@@ -66,6 +66,11 @@
           ],
           "default": "simple",
           "description": "Output format for copied line references."
+        },
+        "copyLineRef.includeSymbol": {
+          "type": "boolean",
+          "default": false,
+          "description": "Append the enclosing symbol name to the reference, e.g. src/auth.ts:45::handleLogin."
         }
       }
     }
