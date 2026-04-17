@@ -28,6 +28,11 @@
         "command": "copyLineRef.showHistory",
         "title": "Show Copy History",
         "category": "Editor"
+      },
+      {
+        "command": "copyLineRef.copyFileReference",
+        "title": "Copy File Reference",
+        "category": "Editor"
       }
     ],
     "keybindings": [
@@ -60,6 +65,13 @@
           "command": "copyLineRef.copyReferenceWithCode",
           "when": "editorTextFocus",
           "group": "9_cutcopypaste"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "copyLineRef.copyFileReference",
+          "when": "!explorerResourceIsFolder",
+          "group": "6_copypath"
         }
       ]
     },

@@ -199,6 +199,19 @@ export function activate(context: vscode.ExtensionContext): void {
             await writeToClipboardWithHistory(output, summary, store);
         }),
 
+        vscode.commands.registerCommand('copyLineRef.copyFileReference', async (uri?: vscode.Uri) => {
+            // Invoked from Explorer context menu (uri provided) or command palette (use active editor).
+            const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
+            if (!targetUri) { return; }
+
+            const relative = vscode.workspace.asRelativePath(targetUri, false);
+            const fileRef = relative === targetUri.fsPath
+                ? path.basename(targetUri.fsPath)
+                : relative;
+
+            await writeToClipboardWithHistory(fileRef, fileRef, store);
+        }),
+
         vscode.commands.registerCommand('copyLineRef.showHistory', async () => {
             const history = store.get<string[]>('history', []);
             if (!history.length) {
