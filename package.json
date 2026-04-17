@@ -71,6 +71,12 @@
           "type": "boolean",
           "default": false,
           "description": "Append the enclosing symbol name to the reference, e.g. src/auth.ts:45::handleLogin."
+        },
+        "copyLineRef.contextLines": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Number of extra lines to include above and below the selection in the code block (Copy Line Reference with Code only). The reference always reflects the exact selection."
         }
       }
     }

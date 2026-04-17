@@ -11,11 +11,12 @@ interface FormatContext {
     symbol?: string;
 }
 
-function getConfig(): { format: RefFormat; includeSymbol: boolean } {
+function getConfig(): { format: RefFormat; includeSymbol: boolean; contextLines: number } {
     const cfg = vscode.workspace.getConfiguration('copyLineRef');
     return {
         format: cfg.get<RefFormat>('format', 'simple'),
         includeSymbol: cfg.get<boolean>('includeSymbol', false),
+        contextLines: cfg.get<number>('contextLines', 0),
     };
 }
 
@@ -148,7 +149,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
             const fileRef = getFileRef(editor.document);
             const lang = getLanguageId(editor.document);
-            const { includeSymbol } = getConfig();
+            const { includeSymbol, contextLines } = getConfig();
+            const lineCount = editor.document.lineCount;
 
             // For multiple selections, emit one fenced block per selection.
             const seen = new Set<string>();
@@ -162,8 +164,12 @@ export function activate(context: vscode.ExtensionContext): void {
                         const ref = formatRef({ fileRef, startLine, endLine, document: editor.document, symbol });
                         if (seen.has(ref)) { return null; }
                         seen.add(ref);
+
+                        // Expand the extracted range by contextLines on each side.
+                        const ctxStart = Math.max(0, sel.start.line - contextLines);
+                        const ctxEnd = Math.min(lineCount - 1, sel.end.line + contextLines);
                         const code = editor.document.getText(
-                            new vscode.Range(sel.start.line, 0, sel.end.line, sel.end.character)
+                            new vscode.Range(ctxStart, 0, ctxEnd, editor.document.lineAt(ctxEnd).text.length)
                         );
                         return `${ref}\n\`\`\`${lang}\n${code}\n\`\`\``;
                     })
