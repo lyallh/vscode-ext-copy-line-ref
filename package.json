@@ -1,0 +1,56 @@
+{
+  "name": "copy-line-ref",
+  "displayName": "Copy Line Reference",
+  "description": "Copy a filename:line reference (e.g. main.ts:10-21) to the clipboard for use as LLM code context.",
+  "version": "0.0.1",
+  "publisher": "lyallh",
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copyLineRef.copyReference",
+        "title": "Copy Line Reference",
+        "category": "Editor"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "copyLineRef.copyReference",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "copyLineRef.copyReference",
+          "when": "editorTextFocus",
+          "group": "9_cutcopypaste"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.js --production",
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "vsce package",
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.82.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0",
+    "@vscode/vsce": "^3.0.0"
+  }
+}
