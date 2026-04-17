@@ -118,13 +118,32 @@ async function resolveSymbol(document: vscode.TextDocument, line: number): Promi
 
 const HISTORY_MAX = 50;
 
+let statusBarItem: vscode.StatusBarItem | undefined;
+
+function getStatusBar(): vscode.StatusBarItem {
+    if (!statusBarItem) {
+        statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+        statusBarItem.command = 'copyLineRef.recopyLast';
+        statusBarItem.tooltip = 'Click to copy again';
+    }
+    return statusBarItem;
+}
+
+function showStatusBar(label: string): void {
+    const bar = getStatusBar();
+    bar.text = `$(clippy) ${label}`;
+    bar.show();
+    // Auto-hide after 8s (longer than before since it's now interactive).
+    setTimeout(() => bar.hide(), 8000);
+}
+
 async function writeToClipboardWithHistory(
     text: string,
     label: string,
     historyStore: vscode.Memento
 ): Promise<void> {
     await vscode.env.clipboard.writeText(text);
-    vscode.window.setStatusBarMessage(`Copied: ${label}`, 3000);
+    showStatusBar(`Copied: ${label}`);
 
     const history: string[] = historyStore.get<string[]>('history', []);
     const updated = [text, ...history.filter(h => h !== text)].slice(0, HISTORY_MAX);
@@ -199,6 +218,13 @@ export function activate(context: vscode.ExtensionContext): void {
             await writeToClipboardWithHistory(output, summary, store);
         }),
 
+        vscode.commands.registerCommand('copyLineRef.recopyLast', async () => {
+            const history = store.get<string[]>('history', []);
+            if (!history.length) { return; }
+            await vscode.env.clipboard.writeText(history[0]);
+            showStatusBar(`Re-copied: ${history[0].split('\n')[0]}`);
+        }),
+
         vscode.commands.registerCommand('copyLineRef.copyFileReference', async (uri?: vscode.Uri) => {
             // Invoked from Explorer context menu (uri provided) or command palette (use active editor).
             const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
@@ -237,4 +263,6 @@ export function activate(context: vscode.ExtensionContext): void {
     );
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+    statusBarItem?.dispose();
+}

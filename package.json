@@ -33,6 +33,11 @@
         "command": "copyLineRef.copyFileReference",
         "title": "Copy File Reference",
         "category": "Editor"
+      },
+      {
+        "command": "copyLineRef.recopyLast",
+        "title": "Re-copy Last Reference",
+        "category": "Editor"
       }
     ],
     "keybindings": [
