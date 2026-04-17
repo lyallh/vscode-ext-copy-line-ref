@@ -31,6 +31,11 @@ function getLanguageId(document: vscode.TextDocument): string {
     return document.languageId === 'plaintext' ? '' : document.languageId;
 }
 
+/** Deduplicate adjacent/overlapping selections that resolve to the same line range. */
+function uniqueRefs(refs: string[]): string[] {
+    return refs.filter((r, i) => refs.indexOf(r) === i);
+}
+
 export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('copyLineRef.copyReference', async () => {
@@ -38,8 +43,15 @@ export function activate(context: vscode.ExtensionContext): void {
             if (!editor) { return; }
 
             const fileRef = getFileRef(editor.document);
-            const { startLine, endLine } = getLineRange(editor.selection);
-            const reference = buildRef(fileRef, startLine, endLine);
+
+            // Support multi-cursor / multi-selection.
+            const refs = uniqueRefs(
+                editor.selections.map(sel => {
+                    const { startLine, endLine } = getLineRange(sel);
+                    return buildRef(fileRef, startLine, endLine);
+                })
+            );
+            const reference = refs.join(', ');
 
             await vscode.env.clipboard.writeText(reference);
             vscode.window.setStatusBarMessage(`Copied: ${reference}`, 3000);
@@ -50,18 +62,30 @@ export function activate(context: vscode.ExtensionContext): void {
             if (!editor) { return; }
 
             const fileRef = getFileRef(editor.document);
-            const sel = editor.selection;
-            const { startLine, endLine } = getLineRange(sel);
-            const reference = buildRef(fileRef, startLine, endLine);
-
             const lang = getLanguageId(editor.document);
-            const code = editor.document.getText(
-                new vscode.Range(sel.start.line, 0, sel.end.line, sel.end.character)
-            );
-            const block = `${reference}\n\`\`\`${lang}\n${code}\n\`\`\``;
 
-            await vscode.env.clipboard.writeText(block);
-            vscode.window.setStatusBarMessage(`Copied: ${reference} + code`, 3000);
+            // For multiple selections, emit one fenced block per selection.
+            const seen = new Set<string>();
+            const blocks = editor.selections
+                .map(sel => {
+                    const { startLine, endLine } = getLineRange(sel);
+                    const ref = buildRef(fileRef, startLine, endLine);
+                    if (seen.has(ref)) { return null; }
+                    seen.add(ref);
+                    const code = editor.document.getText(
+                        new vscode.Range(sel.start.line, 0, sel.end.line, sel.end.character)
+                    );
+                    return `${ref}\n\`\`\`${lang}\n${code}\n\`\`\``;
+                })
+                .filter((b): b is string => b !== null);
+
+            const output = blocks.join('\n\n');
+            const summary = blocks.length === 1
+                ? blocks[0].split('\n')[0]
+                : `${blocks.length} selections from ${fileRef}`;
+
+            await vscode.env.clipboard.writeText(output);
+            vscode.window.setStatusBarMessage(`Copied: ${summary}`, 3000);
         })
     );
 }
