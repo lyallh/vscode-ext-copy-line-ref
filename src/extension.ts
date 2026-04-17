@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { getLineRange, buildSimpleRef, findInnermostSymbol, uniqueRefs } from './utils';
 
 type RefFormat = 'simple' | 'github' | 'markdown-link';
 
@@ -46,14 +47,11 @@ function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine:
 
 function formatRef({ fileRef, startLine, endLine, document, symbol }: FormatContext): string {
     const { format } = getConfig();
-    const lineStr = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
-    const symbolSuffix = symbol ? `::${symbol}` : '';
-    const simple = `${fileRef}:${lineStr}${symbolSuffix}`;
+    const simple = buildSimpleRef(fileRef, startLine, endLine, symbol);
 
     if (format === 'github') {
-        // Symbol suffix appended after the URL fragment for readability.
         const url = getGitHubUrl(document, startLine, endLine);
-        return url ? `${url}${symbolSuffix}` : simple;
+        return url ? `${url}${symbol ? `::${symbol}` : ''}` : simple;
     }
     if (format === 'markdown-link') {
         return `[${simple}](./${fileRef})`;
@@ -70,41 +68,9 @@ function getFileRef(document: vscode.TextDocument): string {
         : relative;
 }
 
-function getLineRange(sel: vscode.Selection): { startLine: number; endLine: number } {
-    const startLine = sel.start.line + 1;
-    // If selection ends at column 0 of a new line, that line wasn't
-    // visually selected — treat the end as the previous line.
-    const endLine = (sel.end.character === 0 && sel.end.line > sel.start.line)
-        ? sel.end.line
-        : sel.end.line + 1;
-    return { startLine, endLine };
-}
-
 function getLanguageId(document: vscode.TextDocument): string {
     // Use VS Code's languageId directly — it matches common fenced-code-block identifiers.
     return document.languageId === 'plaintext' ? '' : document.languageId;
-}
-
-/** Deduplicate adjacent/overlapping selections that resolve to the same line range. */
-function uniqueRefs(refs: string[]): string[] {
-    return refs.filter((r, i) => refs.indexOf(r) === i);
-}
-
-/**
- * Walk the document symbol tree to find the innermost symbol whose range
- * contains the given (0-based) line.
- */
-function findInnermostSymbol(
-    symbols: vscode.DocumentSymbol[],
-    line: number
-): vscode.DocumentSymbol | undefined {
-    for (const sym of symbols) {
-        if (sym.range.start.line <= line && line <= sym.range.end.line) {
-            const child = findInnermostSymbol(sym.children, line);
-            return child ?? sym;
-        }
-    }
-    return undefined;
 }
 
 async function resolveSymbol(document: vscode.TextDocument, line: number): Promise<string | undefined> {
@@ -161,7 +127,6 @@ export function activate(context: vscode.ExtensionContext): void {
             const fileRef = getFileRef(editor.document);
             const { includeSymbol } = getConfig();
 
-            // Support multi-cursor / multi-selection.
             const refs = uniqueRefs(
                 await Promise.all(
                     editor.selections.map(async sel => {
@@ -186,7 +151,6 @@ export function activate(context: vscode.ExtensionContext): void {
             const { includeSymbol, contextLines } = getConfig();
             const lineCount = editor.document.lineCount;
 
-            // For multiple selections, emit one fenced block per selection.
             const seen = new Set<string>();
             const blocks = (
                 await Promise.all(
@@ -199,7 +163,6 @@ export function activate(context: vscode.ExtensionContext): void {
                         if (seen.has(ref)) { return null; }
                         seen.add(ref);
 
-                        // Expand the extracted range by contextLines on each side.
                         const ctxStart = Math.max(0, sel.start.line - contextLines);
                         const ctxEnd = Math.min(lineCount - 1, sel.end.line + contextLines);
                         const code = editor.document.getText(
@@ -226,7 +189,6 @@ export function activate(context: vscode.ExtensionContext): void {
         }),
 
         vscode.commands.registerCommand('copyLineRef.copyFileReference', async (uri?: vscode.Uri) => {
-            // Invoked from Explorer context menu (uri provided) or command palette (use active editor).
             const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
             if (!targetUri) { return; }
 
@@ -245,7 +207,6 @@ export function activate(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            // Show first line of each entry as the label; full content as detail.
             const items = history.map(entry => {
                 const lines = entry.split('\n');
                 return { label: lines[0], detail: lines.length > 1 ? `${lines.length} lines` : undefined, entry };
