@@ -1,6 +1,15 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+function getFileRef(document: vscode.TextDocument): string {
+    // Prefer workspace-relative path; fall back to basename for unsaved/out-of-workspace files.
+    const relative = vscode.workspace.asRelativePath(document.uri, false);
+    // asRelativePath returns the absolute path unchanged when the file is outside the workspace.
+    return relative === document.uri.fsPath
+        ? path.basename(document.fileName)
+        : relative;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
     const disposable = vscode.commands.registerCommand(
         'copyLineRef.copyReference',
@@ -10,7 +19,7 @@ export function activate(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            const fileName = path.basename(editor.document.fileName);
+            const fileName = getFileRef(editor.document);
             const sel = editor.selection;
             const startLine = sel.start.line + 1;
 
