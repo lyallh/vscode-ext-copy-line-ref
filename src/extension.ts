@@ -116,7 +116,24 @@ async function resolveSymbol(document: vscode.TextDocument, line: number): Promi
     return findInnermostSymbol(symbols, line)?.name;
 }
 
+const HISTORY_MAX = 50;
+
+async function writeToClipboardWithHistory(
+    text: string,
+    label: string,
+    historyStore: vscode.Memento
+): Promise<void> {
+    await vscode.env.clipboard.writeText(text);
+    vscode.window.setStatusBarMessage(`Copied: ${label}`, 3000);
+
+    const history: string[] = historyStore.get<string[]>('history', []);
+    const updated = [text, ...history.filter(h => h !== text)].slice(0, HISTORY_MAX);
+    await historyStore.update('history', updated);
+}
+
 export function activate(context: vscode.ExtensionContext): void {
+    const store = context.globalState;
+
     context.subscriptions.push(
         vscode.commands.registerCommand('copyLineRef.copyReference', async () => {
             const editor = vscode.window.activeTextEditor;
@@ -138,9 +155,7 @@ export function activate(context: vscode.ExtensionContext): void {
                 )
             );
             const reference = refs.join(', ');
-
-            await vscode.env.clipboard.writeText(reference);
-            vscode.window.setStatusBarMessage(`Copied: ${reference}`, 3000);
+            await writeToClipboardWithHistory(reference, reference, store);
         }),
 
         vscode.commands.registerCommand('copyLineRef.copyReferenceWithCode', async () => {
@@ -181,8 +196,30 @@ export function activate(context: vscode.ExtensionContext): void {
                 ? blocks[0].split('\n')[0]
                 : `${blocks.length} selections from ${fileRef}`;
 
-            await vscode.env.clipboard.writeText(output);
-            vscode.window.setStatusBarMessage(`Copied: ${summary}`, 3000);
+            await writeToClipboardWithHistory(output, summary, store);
+        }),
+
+        vscode.commands.registerCommand('copyLineRef.showHistory', async () => {
+            const history = store.get<string[]>('history', []);
+            if (!history.length) {
+                vscode.window.showInformationMessage('No copy-line-ref history yet.');
+                return;
+            }
+
+            // Show first line of each entry as the label; full content as detail.
+            const items = history.map(entry => {
+                const lines = entry.split('\n');
+                return { label: lines[0], detail: lines.length > 1 ? `${lines.length} lines` : undefined, entry };
+            });
+
+            const picked = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a previous reference to copy again',
+                matchOnDetail: true,
+            });
+            if (!picked) { return; }
+
+            await vscode.env.clipboard.writeText(picked.entry);
+            vscode.window.setStatusBarMessage(`Copied: ${picked.label}`, 3000);
         })
     );
 }

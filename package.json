@@ -23,6 +23,11 @@
         "command": "copyLineRef.copyReferenceWithCode",
         "title": "Copy Line Reference with Code",
         "category": "Editor"
+      },
+      {
+        "command": "copyLineRef.showHistory",
+        "title": "Show Copy History",
+        "category": "Editor"
       }
     ],
     "keybindings": [
@@ -37,6 +42,11 @@
         "key": "ctrl+alt+shift+c",
         "mac": "cmd+alt+shift+c",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "copyLineRef.showHistory",
+        "key": "ctrl+alt+h",
+        "mac": "cmd+alt+h"
       }
     ],
     "menus": {
