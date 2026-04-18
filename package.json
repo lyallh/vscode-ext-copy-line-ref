@@ -89,7 +89,7 @@
         "copyLineRef.includeSymbol": {
           "type": "boolean",
           "default": false,
-          "description": "Append the enclosing symbol name to the reference, e.g. src/auth.ts:45::handleLogin."
+          "description": "Append the enclosing symbol name to the references, e.g. src/auth.ts:45::handleLogin. Ignored for GitHub URLs."
         },
         "copyLineRef.contextLines": {
           "type": "number",

@@ -83,6 +83,9 @@ src/auth/login.ts:45::handleLogin
 src/models/user.ts:12-30::UserService
 ```
 
+Applies to the `simple` and `markdown-link` formats. The `github` format keeps
+the GitHub URL unchanged so the line anchor remains valid.
+
 Works with any language that has a VS Code symbol provider (TypeScript, Python, Go, Rust, Java, …). Default: `false`.
 
 ### `copyLineRef.contextLines`

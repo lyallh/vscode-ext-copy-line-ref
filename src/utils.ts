@@ -18,6 +18,8 @@ export interface LineRange {
     endLine: number;
 }
 
+export type RefFormat = 'simple' | 'github' | 'markdown-link';
+
 /** Return the inclusive 0-based end line for the visible selection. */
 export function getSelectionEndLine(sel: SelectionLike): number {
     return (sel.end.character === 0 && sel.end.line > sel.start.line)
@@ -65,6 +67,22 @@ export function findInnermostSymbol(symbols: SymbolLike[], line: number): Symbol
 /** Remove duplicate strings, preserving the first occurrence. */
 export function uniqueRefs(refs: string[]): string[] {
     return refs.filter((r, i) => refs.indexOf(r) === i);
+}
+
+/** Select the output shape for a copied reference. */
+export function formatCopiedRef(
+    format: RefFormat,
+    simpleRef: string,
+    fileRef: string,
+    githubUrl?: string | null
+): string {
+    if (format === 'github') {
+        return githubUrl ?? simpleRef;
+    }
+    if (format === 'markdown-link') {
+        return `[${simpleRef}](./${fileRef})`;
+    }
+    return simpleRef;
 }
 
 /** Move the copied entry to the front and trim history to the configured size. */

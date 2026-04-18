@@ -4,14 +4,14 @@ import {
     getLineRange,
     buildSimpleRef,
     findInnermostSymbol,
+    formatCopiedRef,
     pickContainingRepoRoot,
+    type RefFormat,
     uniqueRefs,
     toRepoRelativePath,
     getSelectionEndLine,
     updateHistory,
 } from './utils';
-
-type RefFormat = 'simple' | 'github' | 'markdown-link';
 
 interface FormatContext {
     fileRef: string;
@@ -64,15 +64,8 @@ function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine:
 function formatRef({ fileRef, startLine, endLine, document, symbol }: FormatContext): string {
     const { format } = getConfig();
     const simple = buildSimpleRef(fileRef, startLine, endLine, symbol);
-
-    if (format === 'github') {
-        const url = getGitHubUrl(document, startLine, endLine);
-        return url ? `${url}${symbol ? `::${symbol}` : ''}` : simple;
-    }
-    if (format === 'markdown-link') {
-        return `[${simple}](./${fileRef})`;
-    }
-    return simple;
+    const githubUrl = format === 'github' ? getGitHubUrl(document, startLine, endLine) : null;
+    return formatCopiedRef(format, simple, fileRef, githubUrl);
 }
 
 function getFileRef(document: vscode.TextDocument): string {

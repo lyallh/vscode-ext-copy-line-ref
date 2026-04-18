@@ -5,10 +5,12 @@ import {
     getLineRange,
     buildSimpleRef,
     findInnermostSymbol,
+    formatCopiedRef,
     pickContainingRepoRoot,
     uniqueRefs,
     updateHistory,
     toRepoRelativePath,
+    type RefFormat,
     type SelectionLike,
     type SymbolLike,
 } from '../utils';
@@ -112,6 +114,41 @@ describe('buildSimpleRef', () => {
 
     test('workspace-relative path is preserved verbatim', () => {
         assert.equal(buildSimpleRef('src/auth/login.ts', 1, 1), 'src/auth/login.ts:1');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// formatCopiedRef
+// ---------------------------------------------------------------------------
+
+describe('formatCopiedRef', () => {
+    const fileRef = 'src/auth/login.ts';
+    const simpleRef = 'src/auth/login.ts:45-52::handleLogin';
+    const githubUrl = 'https://github.com/org/repo/blob/main/src/auth/login.ts#L45-L52';
+
+    test('returns the simple reference for simple format', () => {
+        assert.equal(formatCopiedRef('simple', simpleRef, fileRef, githubUrl), simpleRef);
+    });
+
+    test('returns the GitHub URL unchanged for github format', () => {
+        assert.equal(formatCopiedRef('github', simpleRef, fileRef, githubUrl), githubUrl);
+    });
+
+    test('falls back to the simple reference when github url is unavailable', () => {
+        assert.equal(formatCopiedRef('github', simpleRef, fileRef, null), simpleRef);
+    });
+
+    test('returns a markdown link using the simple reference as label', () => {
+        assert.equal(
+            formatCopiedRef('markdown-link', simpleRef, fileRef, githubUrl),
+            '[src/auth/login.ts:45-52::handleLogin](./src/auth/login.ts)'
+        );
+    });
+
+    test('github format never appends the symbol suffix to the url fragment', () => {
+        const result = formatCopiedRef('github' satisfies RefFormat, simpleRef, fileRef, githubUrl);
+        assert.equal(result, githubUrl);
+        assert.ok(!result.includes('::'));
     });
 });
 
