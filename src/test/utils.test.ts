@@ -5,6 +5,7 @@ import {
     getLineRange,
     buildSimpleRef,
     findInnermostSymbol,
+    pickContainingRepoRoot,
     uniqueRefs,
     updateHistory,
     toRepoRelativePath,
@@ -165,6 +166,58 @@ describe('findInnermostSymbol', () => {
     test('picks the correct symbol among siblings', () => {
         const symbols = [sym('alpha', 0, 5), sym('beta', 6, 10)];
         assert.equal(findInnermostSymbol(symbols, 8)?.name, 'beta');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// pickContainingRepoRoot
+// ---------------------------------------------------------------------------
+
+describe('pickContainingRepoRoot', () => {
+    test('returns undefined when no repo contains the file', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/repos/foo', '/repos/bar'], '/elsewhere/baz.ts', '/'),
+            undefined
+        );
+    });
+
+    test('does not confuse sibling repos that share a prefix', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/work/repo', '/work/repo-copy'], '/work/repo-copy/src/x.ts', '/'),
+            '/work/repo-copy'
+        );
+    });
+
+    test('picks the deepest matching nested repo root', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/a', '/a/b'], '/a/b/c.ts', '/'),
+            '/a/b'
+        );
+    });
+
+    test('treats exact equality as contained', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/repos/foo'], '/repos/foo', '/'),
+            '/repos/foo'
+        );
+    });
+
+    test('does not reject valid relative paths that start with dot segments in a filename', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/repos/foo'], '/repos/foo/..bar/file.ts', '/'),
+            '/repos/foo'
+        );
+    });
+
+    test('handles Windows separators', () => {
+        assert.equal(
+            pickContainingRepoRoot(
+                ['C:\\work\\repo', 'C:\\work\\repo-copy'],
+                'C:\\work\\repo-copy\\src\\x.ts',
+                '\\'
+            ),
+            'C:\\work\\repo-copy'
+        );
     });
 });
 

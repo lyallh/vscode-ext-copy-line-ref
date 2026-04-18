@@ -4,6 +4,7 @@ import {
     getLineRange,
     buildSimpleRef,
     findInnermostSymbol,
+    pickContainingRepoRoot,
     uniqueRefs,
     toRepoRelativePath,
     getSelectionEndLine,
@@ -31,16 +32,19 @@ function getConfig(): { format: RefFormat; includeSymbol: boolean; contextLines:
             : 0,
     };
 }
-}
 
 function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine: number): string | null {
     // Resolve the remote URL and branch from workspace git extension API if available.
     const gitExt = vscode.extensions.getExtension('vscode.git');
     if (!gitExt?.isActive) { return null; }
     const git = gitExt.exports.getAPI(1);
-    const repo = git.repositories.find((r: { rootUri: vscode.Uri }) =>
-        document.uri.fsPath.startsWith(r.rootUri.fsPath)
+    const repoRoot = pickContainingRepoRoot(
+        git.repositories.map((r: { rootUri: vscode.Uri }) => r.rootUri.fsPath),
+        document.uri.fsPath
     );
+    const repo = repoRoot
+        ? git.repositories.find((r: { rootUri: vscode.Uri }) => r.rootUri.fsPath === repoRoot)
+        : undefined;
     if (!repo) { return null; }
 
     const remoteUrl: string | undefined = repo.state.remotes[0]?.fetchUrl;

@@ -72,6 +72,25 @@ export function updateHistory(history: string[], entry: string, maxSize: number)
     return [entry, ...history.filter(existing => existing !== entry)].slice(0, maxSize);
 }
 
+/** Pick the deepest repo root that contains `filePath`, if any. */
+export function pickContainingRepoRoot(roots: string[], filePath: string, sep?: string): string | undefined {
+    const pathApi = sep === '\\'
+        ? path.win32
+        : sep === '/'
+            ? path.posix
+            : roots.some(root => root.includes('\\')) || filePath.includes('\\')
+                ? path.win32
+                : path.posix;
+
+    return roots
+        .filter(root => {
+            const relative = pathApi.relative(root, filePath);
+            return relative === ''
+                || (!relative.startsWith(`..${pathApi.sep}`) && relative !== '..' && !pathApi.isAbsolute(relative));
+        })
+        .sort((a, b) => b.length - a.length)[0];
+}
+
 /** Build a Git-repo-relative path and normalize separators for URLs. */
 export function toRepoRelativePath(repoRoot: string, filePath: string): string {
     const pathApi = repoRoot.includes('\\') || filePath.includes('\\')
