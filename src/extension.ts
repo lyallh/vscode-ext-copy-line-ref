@@ -22,11 +22,15 @@ interface FormatContext {
 
 function getConfig(): { format: RefFormat; includeSymbol: boolean; contextLines: number } {
     const cfg = vscode.workspace.getConfiguration('copyLineRef');
+    const rawContextLines = cfg.get<number>('contextLines', 0);
     return {
         format: cfg.get<RefFormat>('format', 'simple'),
         includeSymbol: cfg.get<boolean>('includeSymbol', false),
-        contextLines: cfg.get<number>('contextLines', 0),
+        contextLines: Number.isFinite(rawContextLines)
+            ? Math.max(0, Math.floor(rawContextLines))
+            : 0,
     };
+}
 }
 
 function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine: number): string | null {
