@@ -67,6 +67,11 @@ export function uniqueRefs(refs: string[]): string[] {
     return refs.filter((r, i) => refs.indexOf(r) === i);
 }
 
+/** Move the copied entry to the front and trim history to the configured size. */
+export function updateHistory(history: string[], entry: string, maxSize: number): string[] {
+    return [entry, ...history.filter(existing => existing !== entry)].slice(0, maxSize);
+}
+
 /** Build a Git-repo-relative path and normalize separators for URLs. */
 export function toRepoRelativePath(repoRoot: string, filePath: string): string {
     const pathApi = repoRoot.includes('\\') || filePath.includes('\\')

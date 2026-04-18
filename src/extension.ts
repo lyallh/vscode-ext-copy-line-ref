@@ -7,6 +7,7 @@ import {
     uniqueRefs,
     toRepoRelativePath,
     getSelectionEndLine,
+    updateHistory,
 } from './utils';
 
 type RefFormat = 'simple' | 'github' | 'markdown-link';
@@ -119,7 +120,7 @@ async function writeToClipboardWithHistory(
     showStatusBar(`Copied: ${label}`);
 
     const history: string[] = historyStore.get<string[]>('history', []);
-    const updated = [text, ...history.filter(h => h !== text)].slice(0, HISTORY_MAX);
+    const updated = updateHistory(history, text, HISTORY_MAX);
     await historyStore.update('history', updated);
 }
 
@@ -226,8 +227,7 @@ export function activate(context: vscode.ExtensionContext): void {
             });
             if (!picked) { return; }
 
-            await vscode.env.clipboard.writeText(picked.entry);
-            vscode.window.setStatusBarMessage(`Copied: ${picked.label}`, 3000);
+            await writeToClipboardWithHistory(picked.entry, picked.label, store);
         })
     );
 }

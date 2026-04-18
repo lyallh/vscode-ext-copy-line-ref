@@ -6,6 +6,7 @@ import {
     buildSimpleRef,
     findInnermostSymbol,
     uniqueRefs,
+    updateHistory,
     toRepoRelativePath,
     type SelectionLike,
     type SymbolLike,
@@ -195,6 +196,24 @@ describe('uniqueRefs', () => {
 
     test('single entry returns single entry', () => {
         assert.deepEqual(uniqueRefs(['src/main.ts:1']), ['src/main.ts:1']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// updateHistory
+// ---------------------------------------------------------------------------
+
+describe('updateHistory', () => {
+    test('prepends a new entry', () => {
+        assert.deepEqual(updateHistory(['b', 'c'], 'a', 50), ['a', 'b', 'c']);
+    });
+
+    test('moves an existing entry to the front', () => {
+        assert.deepEqual(updateHistory(['a', 'b', 'c'], 'b', 50), ['b', 'a', 'c']);
+    });
+
+    test('trims to the configured maximum size', () => {
+        assert.deepEqual(updateHistory(['b', 'c'], 'a', 2), ['a', 'b']);
     });
 });
 
