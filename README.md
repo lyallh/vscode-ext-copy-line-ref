@@ -10,29 +10,32 @@ src/auth/login.ts:45-62::handleLogin
 
 ## Commands
 
-| Command | Shortcut (Win/Linux) | Shortcut (Mac) | Also available |
-|---|---|---|---|
-| **Copy Line Reference** | `Ctrl+Alt+C` | `Cmd+Alt+C` | Right-click menu |
-| **Copy Line Reference with Code** | `Ctrl+Alt+Shift+C` | `Cmd+Alt+Shift+C` | Right-click menu |
-| **Show Copy History** | — | — | Command palette |
-| **Copy File Reference** | — | — | Command palette |
-| **Re-copy Last Reference** | — | — | Click status bar / command palette |
+| Command                           | Shortcut (Win/Linux) | Shortcut (Mac)    | Also available                     |
+| --------------------------------- | -------------------- | ----------------- | ---------------------------------- |
+| **Copy Line Reference**           | `Ctrl+Alt+C`         | `Cmd+Alt+C`       | Right-click menu                   |
+| **Copy Line Reference with Code** | `Ctrl+Alt+Shift+C`   | `Cmd+Alt+Shift+C` | Right-click menu                   |
+| **Show Copy History**             | —                    | —                 | Command palette                    |
+| **Copy File Reference**           | —                    | —                 | Command palette                    |
+| **Re-copy Last Reference**        | —                    | —                 | Click status bar / command palette |
 
 ---
 
 ## Basic usage
 
 **Select nothing (cursor on a line):**
+
 ```
 src/utils/parser.ts:42
 ```
 
 **Select multiple lines:**
+
 ```
 src/utils/parser.ts:42-58
 ```
 
 **Multiple cursors/selections** are joined with `, `:
+
 ```
 src/utils/parser.ts:42, src/utils/parser.ts:87-93
 ```
@@ -41,7 +44,7 @@ src/utils/parser.ts:42, src/utils/parser.ts:87-93
 
 ## Copy with code block
 
-`Ctrl+Alt+Shift+C` copies the reference followed by a fenced markdown code block — ready to paste directly into a chat:
+`Ctrl+Alt+Shift+C` copies the reference followed by a fenced Markdown code block — ready to paste directly into a chat:
 
 ````
 src/auth/login.ts:45-52
@@ -66,11 +69,11 @@ Open **Settings** (`Ctrl+,`) and search for `copyLineRef`, or add to `settings.j
 
 Controls the shape of the copied reference.
 
-| Value | Example output |
-|---|---|
-| `simple` *(default)* | `src/auth/login.ts:45-52` |
-| `github` | `https://github.com/org/repo/blob/<commit>/src/auth/login.ts#L45-L52` |
-| `markdown-link` | `[src/auth/login.ts:45-52](./src/auth/login.ts)` |
+| Value                | Example output                                                        |
+| -------------------- | --------------------------------------------------------------------- |
+| `simple` _(default)_ | `src/auth/login.ts:45-52`                                             |
+| `github`             | `https://github.com/org/repo/blob/<commit>/src/auth/login.ts#L45-L52` |
+| `markdown-link`      | `[src/auth/login.ts:45-52](./src/auth/login.ts)`                      |
 
 `github` resolves the GitHub remote from the built-in Git extension, preferring `origin` when available, and pins the URL to the current `HEAD` commit SHA. Falls back to `simple` when the file is not inside a GitHub-hosted repository or no committed `HEAD` is available.
 
@@ -90,14 +93,22 @@ Works with any language that has a VS Code symbol provider (TypeScript, Python, 
 
 ### `copyLineRef.contextLines`
 
-Number of extra lines to include **above and below** the selection in the code block produced by *Copy Line Reference with Code*. The reference line numbers always reflect the exact selection. Default: `0`.
+Number of extra lines to include **above and below** the selection in the code block produced by _Copy Line Reference with Code_. The reference line numbers always reflect the exact selection. Default: `0`.
 
-Example with `"copyLineRef.contextLines": 3` and lines 10–12 selected:
+Example with `"copyLineRef.contextLines": 3` and line 10 selected:
 
 ````
-src/server.ts:10-12
+src/server.ts:10
 ```typescript
-// lines 7–15 are in the block; reference still shows :10-12
+const app = createServer();
+app.use(authenticate);
+app.use(router);
+const port = process.env.PORT ?? '3000';
+app.listen(port);
+logger.info(`listening on ${port}`);
+export { app };
+// extra context lines 7-9 above and 13-15 below are included here
+// but the copied reference still points to the exact selection: :10
 ````
 
 ---
@@ -130,6 +141,7 @@ npm run package     # produce .vsix for local install
 ```
 
 Install a local build:
+
 ```bash
 code --install-extension copy-line-ref-0.0.1.vsix
 ```
