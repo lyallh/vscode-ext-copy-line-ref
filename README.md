@@ -14,8 +14,8 @@ src/auth/login.ts:45-62::handleLogin
 |---|---|---|---|
 | **Copy Line Reference** | `Ctrl+Alt+C` | `Cmd+Alt+C` | Right-click menu |
 | **Copy Line Reference with Code** | `Ctrl+Alt+Shift+C` | `Cmd+Alt+Shift+C` | Right-click menu |
-| **Show Copy History** | `Ctrl+Alt+H` | `Cmd+Alt+H` | Command palette |
-| **Copy File Reference** | — | — | Explorer right-click |
+| **Show Copy History** | — | — | Command palette |
+| **Copy File Reference** | — | — | Command palette |
 | **Re-copy Last Reference** | — | — | Click status bar / command palette |
 
 ---
@@ -112,7 +112,7 @@ Typical session with an LLM agent:
 1. Find the relevant code in your editor.
 2. Select lines 45–62, press `Ctrl+Alt+Shift+C`.
 3. Paste into the LLM chat — the reference and code arrive together.
-4. The agent suggests a fix referencing `src/auth/login.ts:50`. Use `Ctrl+Alt+H` to re-paste other related snippets without leaving the chat.
+4. The agent suggests a fix referencing `src/auth/login.ts:50`. Run `Show Copy History` from the command palette to re-copy other related snippets without leaving the chat.
 
 ---
 
