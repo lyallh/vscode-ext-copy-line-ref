@@ -52,11 +52,6 @@
         "key": "ctrl+alt+shift+c",
         "mac": "cmd+alt+shift+c",
         "when": "editorTextFocus"
-      },
-      {
-        "command": "copyLineRef.showHistory",
-        "key": "ctrl+alt+h",
-        "mac": "cmd+alt+h"
       }
     ],
     "menus": {
@@ -71,13 +66,6 @@
           "when": "editorTextFocus",
           "group": "9_cutcopypaste"
         }
-      ],
-      "explorer/context": [
-        {
-          "command": "copyLineRef.copyFileReference",
-          "when": "!explorerResourceIsFolder",
-          "group": "6_copypath"
-        }
       ]
     },
     "configuration": {
@@ -85,7 +73,11 @@
       "properties": {
         "copyLineRef.format": {
           "type": "string",
-          "enum": ["simple", "github", "markdown-link"],
+          "enum": [
+            "simple",
+            "github",
+            "markdown-link"
+          ],
           "enumDescriptions": [
             "src/main.ts:10-21",
             "https://github.com/org/repo/blob/main/src/main.ts#L10-L21  (falls back to simple if not a GitHub repo)",
