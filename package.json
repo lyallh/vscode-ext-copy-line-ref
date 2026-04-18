@@ -4,6 +4,18 @@
   "description": "Copy a filename:line reference (e.g. main.ts:10-21) to the clipboard for use as LLM code context.",
   "version": "0.0.1",
   "publisher": "lyallh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyallh/vscode-ext-copy-line-ref.git"
+  },
+  "homepage": "https://github.com/lyallh/vscode-ext-copy-line-ref",
+  "bugs": {
+    "url": "https://github.com/lyallh/vscode-ext-copy-line-ref/issues"
+  },
+  "files": [
+    "dist/**",
+    "README.md"
+  ],
   "engines": {
     "vscode": "^1.82.0"
   },
@@ -106,7 +118,7 @@
     "watch": "node esbuild.js --watch",
     "typecheck": "tsc --noEmit",
     "test": "node --require tsx/cjs --test src/test/utils.test.ts",
-    "package": "vsce package",
+    "package": "vsce package --no-dependencies",
     "lint": "eslint src"
   },
   "devDependencies": {
