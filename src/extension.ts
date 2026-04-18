@@ -94,6 +94,7 @@ async function resolveSymbol(document: vscode.TextDocument, line: number): Promi
 const HISTORY_MAX = 50;
 
 let statusBarItem: vscode.StatusBarItem | undefined;
+let hideStatusBarTimer: ReturnType<typeof setTimeout> | undefined;
 
 function getStatusBar(): vscode.StatusBarItem {
     if (!statusBarItem) {
@@ -109,7 +110,13 @@ function showStatusBar(label: string): void {
     bar.text = `$(clippy) ${label}`;
     bar.show();
     // Auto-hide after 8s (longer than before since it's now interactive).
-    setTimeout(() => bar.hide(), 8000);
+    if (hideStatusBarTimer) {
+        clearTimeout(hideStatusBarTimer);
+    }
+    hideStatusBarTimer = setTimeout(() => {
+        bar.hide();
+        hideStatusBarTimer = undefined;
+    }, 8000);
 }
 
 async function writeToClipboardWithHistory(
@@ -234,5 +241,9 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
+    if (hideStatusBarTimer) {
+        clearTimeout(hideStatusBarTimer);
+        hideStatusBarTimer = undefined;
+    }
     statusBarItem?.dispose();
 }
