@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getLineRange, buildSimpleRef, findInnermostSymbol, uniqueRefs } from './utils';
+import { getLineRange, buildSimpleRef, findInnermostSymbol, uniqueRefs, toRepoRelativePath } from './utils';
 
 type RefFormat = 'simple' | 'github' | 'markdown-link';
 
@@ -40,7 +40,7 @@ function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine:
     if (!match) { return null; }
 
     const repoPath = match[1];
-    const relative = vscode.workspace.asRelativePath(document.uri, false);
+    const relative = toRepoRelativePath(repo.rootUri.fsPath, document.uri.fsPath);
     const lineFragment = startLine === endLine ? `L${startLine}` : `L${startLine}-L${endLine}`;
     return `https://github.com/${repoPath}/blob/${branch}/${relative}#${lineFragment}`;
 }

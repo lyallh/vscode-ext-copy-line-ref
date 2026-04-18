@@ -5,6 +5,7 @@ import {
     buildSimpleRef,
     findInnermostSymbol,
     uniqueRefs,
+    toRepoRelativePath,
     type SelectionLike,
     type SymbolLike,
 } from '../utils';
@@ -175,5 +176,25 @@ describe('uniqueRefs', () => {
 
     test('single entry returns single entry', () => {
         assert.deepEqual(uniqueRefs(['src/main.ts:1']), ['src/main.ts:1']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// toRepoRelativePath
+// ---------------------------------------------------------------------------
+
+describe('toRepoRelativePath', () => {
+    test('drops parent workspace segments before the git root', () => {
+        assert.equal(
+            toRepoRelativePath('/workspace/subrepo', '/workspace/subrepo/src/extension.ts'),
+            'src/extension.ts'
+        );
+    });
+
+    test('normalizes Windows separators for GitHub URLs', () => {
+        assert.equal(
+            toRepoRelativePath('C:\\workspace\\subrepo', 'C:\\workspace\\subrepo\\src\\extension.ts'),
+            'src/extension.ts'
+        );
     });
 });

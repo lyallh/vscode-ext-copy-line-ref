@@ -1,3 +1,5 @@
+import * as path from 'path';
+
 // Pure functions with no VS Code dependency — importable in tests without mocking vscode.
 
 export interface SelectionLike {
@@ -58,4 +60,12 @@ export function findInnermostSymbol(symbols: SymbolLike[], line: number): Symbol
 /** Remove duplicate strings, preserving the first occurrence. */
 export function uniqueRefs(refs: string[]): string[] {
     return refs.filter((r, i) => refs.indexOf(r) === i);
+}
+
+/** Build a Git-repo-relative path and normalize separators for URLs. */
+export function toRepoRelativePath(repoRoot: string, filePath: string): string {
+    const pathApi = repoRoot.includes('\\') || filePath.includes('\\')
+        ? path.win32
+        : path.posix;
+    return pathApi.relative(repoRoot, filePath).split(pathApi.sep).join('/');
 }
