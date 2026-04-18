@@ -1,10 +1,13 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    getSelectionEndLine,
     getLineRange,
     buildSimpleRef,
     findInnermostSymbol,
     uniqueRefs,
+    updateHistory,
+    toRepoRelativePath,
     type SelectionLike,
     type SymbolLike,
 } from '../utils';
@@ -23,6 +26,24 @@ function sel(
 function sym(name: string, startLine: number, endLine: number, children: SymbolLike[] = []): SymbolLike {
     return { name, range: { start: { line: startLine }, end: { line: endLine } }, children };
 }
+
+// ---------------------------------------------------------------------------
+// getSelectionEndLine
+// ---------------------------------------------------------------------------
+
+describe('getSelectionEndLine', () => {
+    test('returns the current line for a cursor', () => {
+        assert.equal(getSelectionEndLine(sel(9, 5, 9, 5)), 9);
+    });
+
+    test('keeps the same line for a normal single-line selection', () => {
+        assert.equal(getSelectionEndLine(sel(9, 0, 9, 30)), 9);
+    });
+
+    test('uses the actual last selected line for a whole-line selection', () => {
+        assert.equal(getSelectionEndLine(sel(9, 0, 21, 0)), 20);
+    });
+});
 
 // ---------------------------------------------------------------------------
 // getLineRange
@@ -175,5 +196,43 @@ describe('uniqueRefs', () => {
 
     test('single entry returns single entry', () => {
         assert.deepEqual(uniqueRefs(['src/main.ts:1']), ['src/main.ts:1']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// updateHistory
+// ---------------------------------------------------------------------------
+
+describe('updateHistory', () => {
+    test('prepends a new entry', () => {
+        assert.deepEqual(updateHistory(['b', 'c'], 'a', 50), ['a', 'b', 'c']);
+    });
+
+    test('moves an existing entry to the front', () => {
+        assert.deepEqual(updateHistory(['a', 'b', 'c'], 'b', 50), ['b', 'a', 'c']);
+    });
+
+    test('trims to the configured maximum size', () => {
+        assert.deepEqual(updateHistory(['b', 'c'], 'a', 2), ['a', 'b']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// toRepoRelativePath
+// ---------------------------------------------------------------------------
+
+describe('toRepoRelativePath', () => {
+    test('drops parent workspace segments before the git root', () => {
+        assert.equal(
+            toRepoRelativePath('/workspace/subrepo', '/workspace/subrepo/src/extension.ts'),
+            'src/extension.ts'
+        );
+    });
+
+    test('normalizes Windows separators for GitHub URLs', () => {
+        assert.equal(
+            toRepoRelativePath('C:\\workspace\\subrepo', 'C:\\workspace\\subrepo\\src\\extension.ts'),
+            'src/extension.ts'
+        );
     });
 });

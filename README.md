@@ -37,11 +37,6 @@ src/utils/parser.ts:42-58
 src/utils/parser.ts:42, src/utils/parser.ts:87-93
 ```
 
-**File reference** (Explorer right-click, no line number):
-```
-src/utils/parser.ts
-```
-
 ---
 
 ## Copy with code block
@@ -106,7 +101,7 @@ src/server.ts:10-12
 
 ## History
 
-Every copy is recorded (up to 50 entries). Press `Ctrl+Alt+H` to open a Quick Pick of previous references and re-copy any of them. The status bar item shown after each copy is also clickable and re-copies the most recent entry.
+Every copy is recorded (up to 50 entries). Use `Show Copy History` command to open a Quick Pick of previous references and re-copy any of them. The status bar item shown after each copy is also clickable and re-copies the most recent entry.
 
 ---
 

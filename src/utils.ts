@@ -1,3 +1,5 @@
+import * as path from 'path';
+
 // Pure functions with no VS Code dependency — importable in tests without mocking vscode.
 
 export interface SelectionLike {
@@ -16,6 +18,13 @@ export interface LineRange {
     endLine: number;
 }
 
+/** Return the inclusive 0-based end line for the visible selection. */
+export function getSelectionEndLine(sel: SelectionLike): number {
+    return (sel.end.character === 0 && sel.end.line > sel.start.line)
+        ? sel.end.line - 1
+        : sel.end.line;
+}
+
 /**
  * Convert a VS Code Selection (0-based) to 1-based display line numbers.
  * Handles the triple-click edge case where the selection anchor lands at
@@ -23,9 +32,7 @@ export interface LineRange {
  */
 export function getLineRange(sel: SelectionLike): LineRange {
     const startLine = sel.start.line + 1;
-    const endLine = (sel.end.character === 0 && sel.end.line > sel.start.line)
-        ? sel.end.line          // exclusive boundary — already 1-based relative to start
-        : sel.end.line + 1;
+    const endLine = getSelectionEndLine(sel) + 1;
     return { startLine, endLine };
 }
 
@@ -58,4 +65,17 @@ export function findInnermostSymbol(symbols: SymbolLike[], line: number): Symbol
 /** Remove duplicate strings, preserving the first occurrence. */
 export function uniqueRefs(refs: string[]): string[] {
     return refs.filter((r, i) => refs.indexOf(r) === i);
+}
+
+/** Move the copied entry to the front and trim history to the configured size. */
+export function updateHistory(history: string[], entry: string, maxSize: number): string[] {
+    return [entry, ...history.filter(existing => existing !== entry)].slice(0, maxSize);
+}
+
+/** Build a Git-repo-relative path and normalize separators for URLs. */
+export function toRepoRelativePath(repoRoot: string, filePath: string): string {
+    const pathApi = repoRoot.includes('\\') || filePath.includes('\\')
+        ? path.win32
+        : path.posix;
+    return pathApi.relative(repoRoot, filePath).split(pathApi.sep).join('/');
 }

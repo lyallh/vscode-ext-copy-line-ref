@@ -1,6 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getLineRange, buildSimpleRef, findInnermostSymbol, uniqueRefs } from './utils';
+import {
+    getLineRange,
+    buildSimpleRef,
+    findInnermostSymbol,
+    uniqueRefs,
+    toRepoRelativePath,
+    getSelectionEndLine,
+    updateHistory,
+} from './utils';
 
 type RefFormat = 'simple' | 'github' | 'markdown-link';
 
@@ -40,7 +48,7 @@ function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine:
     if (!match) { return null; }
 
     const repoPath = match[1];
-    const relative = vscode.workspace.asRelativePath(document.uri, false);
+    const relative = toRepoRelativePath(repo.rootUri.fsPath, document.uri.fsPath);
     const lineFragment = startLine === endLine ? `L${startLine}` : `L${startLine}-L${endLine}`;
     return `https://github.com/${repoPath}/blob/${branch}/${relative}#${lineFragment}`;
 }
@@ -112,7 +120,7 @@ async function writeToClipboardWithHistory(
     showStatusBar(`Copied: ${label}`);
 
     const history: string[] = historyStore.get<string[]>('history', []);
-    const updated = [text, ...history.filter(h => h !== text)].slice(0, HISTORY_MAX);
+    const updated = updateHistory(history, text, HISTORY_MAX);
     await historyStore.update('history', updated);
 }
 
@@ -164,7 +172,8 @@ export function activate(context: vscode.ExtensionContext): void {
                         seen.add(ref);
 
                         const ctxStart = Math.max(0, sel.start.line - contextLines);
-                        const ctxEnd = Math.min(lineCount - 1, sel.end.line + contextLines);
+                        const selectionEndLine = getSelectionEndLine(sel);
+                        const ctxEnd = Math.min(lineCount - 1, selectionEndLine + contextLines);
                         const code = editor.document.getText(
                             new vscode.Range(ctxStart, 0, ctxEnd, editor.document.lineAt(ctxEnd).text.length)
                         );
@@ -218,8 +227,7 @@ export function activate(context: vscode.ExtensionContext): void {
             });
             if (!picked) { return; }
 
-            await vscode.env.clipboard.writeText(picked.entry);
-            vscode.window.setStatusBarMessage(`Copied: ${picked.label}`, 3000);
+            await writeToClipboardWithHistory(picked.entry, picked.label, store);
         })
     );
 }
