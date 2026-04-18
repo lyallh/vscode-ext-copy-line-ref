@@ -80,7 +80,7 @@
           ],
           "enumDescriptions": [
             "src/main.ts:10-21",
-            "https://github.com/org/repo/blob/main/src/main.ts#L10-L21  (falls back to simple if not a GitHub repo)",
+            "https://github.com/org/repo/blob/<commit>/src/main.ts#L10-L21  (prefers origin, falls back to simple if not a GitHub repo)",
             "[src/main.ts:10-21](./src/main.ts)"
           ],
           "default": "simple",

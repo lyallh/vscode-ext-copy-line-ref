@@ -69,10 +69,10 @@ Controls the shape of the copied reference.
 | Value | Example output |
 |---|---|
 | `simple` *(default)* | `src/auth/login.ts:45-52` |
-| `github` | `https://github.com/org/repo/blob/main/src/auth/login.ts#L45-L52` |
+| `github` | `https://github.com/org/repo/blob/<commit>/src/auth/login.ts#L45-L52` |
 | `markdown-link` | `[src/auth/login.ts:45-52](./src/auth/login.ts)` |
 
-`github` resolves the remote URL and current branch via the built-in Git extension. Falls back to `simple` when the file is not inside a GitHub-hosted repository.
+`github` resolves the GitHub remote from the built-in Git extension, preferring `origin` when available, and pins the URL to the current `HEAD` commit SHA. Falls back to `simple` when the file is not inside a GitHub-hosted repository or no committed `HEAD` is available.
 
 ### `copyLineRef.includeSymbol`
 

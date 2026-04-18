@@ -18,6 +18,11 @@ export interface LineRange {
     endLine: number;
 }
 
+export interface GitRemoteLike {
+    name?: string;
+    fetchUrl?: string;
+}
+
 export type RefFormat = 'simple' | 'github' | 'markdown-link';
 
 /** Return the inclusive 0-based end line for the visible selection. */
@@ -90,6 +95,15 @@ export function updateHistory(history: string[], entry: string, maxSize: number)
     return [entry, ...history.filter(existing => existing !== entry)].slice(0, maxSize);
 }
 
+/** Prefer the GitHub remote named `origin`, otherwise use the first GitHub remote. */
+export function pickGitHubRemoteUrl(remotes: GitRemoteLike[]): string | undefined {
+    const githubRemotes = remotes.filter(remote =>
+        typeof remote.fetchUrl === 'string' && getGitHubRepoPath(remote.fetchUrl) !== null
+    );
+    return githubRemotes.find(remote => remote.name === 'origin')?.fetchUrl
+        ?? githubRemotes[0]?.fetchUrl;
+}
+
 /** Pick the deepest repo root that contains `filePath`, if any. */
 export function pickContainingRepoRoot(roots: string[], filePath: string, sep?: string): string | undefined {
     const pathApi = sep === '\\'
@@ -107,6 +121,27 @@ export function pickContainingRepoRoot(roots: string[], filePath: string, sep?: 
                 || (!relative.startsWith(`..${pathApi.sep}`) && relative !== '..' && !pathApi.isAbsolute(relative));
         })
         .sort((a, b) => b.length - a.length)[0];
+}
+
+/** Extract `owner/repo` from a GitHub SSH or HTTPS fetch URL. */
+export function getGitHubRepoPath(remoteUrl: string): string | null {
+    const match = remoteUrl.match(/github\.com[:/](.+?)(?:\.git)?$/);
+    return match?.[1] ?? null;
+}
+
+/** Build a stable GitHub blob URL pinned to a commit SHA. */
+export function buildGitHubBlobUrl(
+    remoteUrl: string,
+    commit: string,
+    relativePath: string,
+    startLine: number,
+    endLine: number
+): string | null {
+    const repoPath = getGitHubRepoPath(remoteUrl);
+    if (!repoPath) { return null; }
+
+    const lineFragment = startLine === endLine ? `L${startLine}` : `L${startLine}-L${endLine}`;
+    return `https://github.com/${repoPath}/blob/${commit}/${relativePath}#${lineFragment}`;
 }
 
 /** Build a Git-repo-relative path and normalize separators for URLs. */

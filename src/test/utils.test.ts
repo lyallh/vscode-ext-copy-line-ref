@@ -1,16 +1,20 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    buildGitHubBlobUrl,
     getSelectionEndLine,
     getLineRange,
     buildSimpleRef,
     findInnermostSymbol,
     formatCopiedRef,
+    getGitHubRepoPath,
+    pickGitHubRemoteUrl,
     pickContainingRepoRoot,
     uniqueRefs,
     updateHistory,
     toRepoRelativePath,
     type RefFormat,
+    type GitRemoteLike,
     type SelectionLike,
     type SymbolLike,
 } from '../utils';
@@ -124,7 +128,7 @@ describe('buildSimpleRef', () => {
 describe('formatCopiedRef', () => {
     const fileRef = 'src/auth/login.ts';
     const simpleRef = 'src/auth/login.ts:45-52::handleLogin';
-    const githubUrl = 'https://github.com/org/repo/blob/main/src/auth/login.ts#L45-L52';
+    const githubUrl = 'https://github.com/org/repo/blob/0123456789abcdef/src/auth/login.ts#L45-L52';
 
     test('returns the simple reference for simple format', () => {
         assert.equal(formatCopiedRef('simple', simpleRef, fileRef, githubUrl), simpleRef);
@@ -149,6 +153,79 @@ describe('formatCopiedRef', () => {
         const result = formatCopiedRef('github' satisfies RefFormat, simpleRef, fileRef, githubUrl);
         assert.equal(result, githubUrl);
         assert.ok(!result.includes('::'));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// GitHub URL helpers
+// ---------------------------------------------------------------------------
+
+describe('pickGitHubRemoteUrl', () => {
+    test('prefers the github remote named origin', () => {
+        const remotes: GitRemoteLike[] = [
+            { name: 'upstream', fetchUrl: 'git@github.com:org/upstream.git' },
+            { name: 'origin', fetchUrl: 'git@github.com:me/fork.git' },
+        ];
+        assert.equal(pickGitHubRemoteUrl(remotes), 'git@github.com:me/fork.git');
+    });
+
+    test('falls back to the first github remote when origin is missing', () => {
+        const remotes: GitRemoteLike[] = [
+            { name: 'mirror', fetchUrl: 'git@github.com:org/repo.git' },
+            { name: 'backup', fetchUrl: 'https://github.com/org/backup.git' },
+        ];
+        assert.equal(pickGitHubRemoteUrl(remotes), 'git@github.com:org/repo.git');
+    });
+
+    test('ignores non-github remotes when selecting a fetch url', () => {
+        const remotes: GitRemoteLike[] = [
+            { name: 'origin', fetchUrl: 'git@gitlab.com:org/repo.git' },
+            { name: 'github', fetchUrl: 'https://github.com/org/repo.git' },
+        ];
+        assert.equal(pickGitHubRemoteUrl(remotes), 'https://github.com/org/repo.git');
+    });
+
+    test('returns undefined when no github remote exists', () => {
+        const remotes: GitRemoteLike[] = [
+            { name: 'origin', fetchUrl: 'git@gitlab.com:org/repo.git' },
+        ];
+        assert.equal(pickGitHubRemoteUrl(remotes), undefined);
+    });
+});
+
+describe('getGitHubRepoPath', () => {
+    test('extracts owner and repo from ssh remotes', () => {
+        assert.equal(getGitHubRepoPath('git@github.com:org/repo.git'), 'org/repo');
+    });
+
+    test('extracts owner and repo from https remotes', () => {
+        assert.equal(getGitHubRepoPath('https://github.com/org/repo.git'), 'org/repo');
+    });
+
+    test('returns null for non-github remotes', () => {
+        assert.equal(getGitHubRepoPath('git@gitlab.com:org/repo.git'), null);
+    });
+});
+
+describe('buildGitHubBlobUrl', () => {
+    test('builds a blob url pinned to the commit sha', () => {
+        assert.equal(
+            buildGitHubBlobUrl(
+                'git@github.com:org/repo.git',
+                '0123456789abcdef',
+                'src/auth/login.ts',
+                45,
+                52
+            ),
+            'https://github.com/org/repo/blob/0123456789abcdef/src/auth/login.ts#L45-L52'
+        );
+    });
+
+    test('returns null for non-github remotes', () => {
+        assert.equal(
+            buildGitHubBlobUrl('git@gitlab.com:org/repo.git', '0123456789abcdef', 'src/auth/login.ts', 45, 45),
+            null
+        );
     });
 });
 

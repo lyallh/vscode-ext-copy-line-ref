@@ -3,8 +3,10 @@ import * as path from 'path';
 import {
     getLineRange,
     buildSimpleRef,
+    buildGitHubBlobUrl,
     findInnermostSymbol,
     formatCopiedRef,
+    pickGitHubRemoteUrl,
     pickContainingRepoRoot,
     type RefFormat,
     uniqueRefs,
@@ -34,7 +36,7 @@ function getConfig(): { format: RefFormat; includeSymbol: boolean; contextLines:
 }
 
 function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine: number): string | null {
-    // Resolve the remote URL and branch from workspace git extension API if available.
+    // Resolve the remote URL and HEAD commit from the built-in Git extension API if available.
     const gitExt = vscode.extensions.getExtension('vscode.git');
     if (!gitExt?.isActive) { return null; }
     const git = gitExt.exports.getAPI(1);
@@ -47,18 +49,12 @@ function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine:
         : undefined;
     if (!repo) { return null; }
 
-    const remoteUrl: string | undefined = repo.state.remotes[0]?.fetchUrl;
-    const branch: string = repo.state.HEAD?.name ?? 'HEAD';
-    if (!remoteUrl) { return null; }
+    const remoteUrl = pickGitHubRemoteUrl(repo.state.remotes);
+    const commit = repo.state.HEAD?.commit;
+    if (!remoteUrl || !commit) { return null; }
 
-    // Normalise SSH and HTTPS remote URLs to a https://github.com/... base.
-    const match = remoteUrl.match(/github\.com[:/](.+?)(?:\.git)?$/);
-    if (!match) { return null; }
-
-    const repoPath = match[1];
     const relative = toRepoRelativePath(repo.rootUri.fsPath, document.uri.fsPath);
-    const lineFragment = startLine === endLine ? `L${startLine}` : `L${startLine}-L${endLine}`;
-    return `https://github.com/${repoPath}/blob/${branch}/${relative}#${lineFragment}`;
+    return buildGitHubBlobUrl(remoteUrl, commit, relative, startLine, endLine);
 }
 
 function formatRef({ fileRef, startLine, endLine, document, symbol }: FormatContext): string {
