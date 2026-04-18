@@ -65,8 +65,10 @@ function formatRef({ fileRef, startLine, endLine, document, symbol }: FormatCont
 }
 
 function getFileRef(document: vscode.TextDocument): string {
-    // Prefer workspace-relative path; fall back to basename for unsaved/out-of-workspace files.
-    const relative = vscode.workspace.asRelativePath(document.uri, false);
+    // Include the workspace folder name when multiple roots are open to avoid
+    // ambiguous `src/...` references across different folders.
+    const includeWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
+    const relative = vscode.workspace.asRelativePath(document.uri, includeWorkspace);
     // asRelativePath returns the absolute path unchanged when the file is outside the workspace.
     return relative === document.uri.fsPath
         ? path.basename(document.fileName)
@@ -205,11 +207,11 @@ export function activate(context: vscode.ExtensionContext): void {
             const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
             if (!targetUri) { return; }
 
-            const relative = vscode.workspace.asRelativePath(targetUri, false);
-            const fileRef = relative === targetUri.fsPath
-                ? path.basename(targetUri.fsPath)
-                : relative;
-
+            const activeDocument = vscode.window.activeTextEditor?.document;
+            const document = activeDocument?.uri.toString() === targetUri.toString()
+                ? activeDocument
+                : await vscode.workspace.openTextDocument(targetUri);
+            const fileRef = getFileRef(document);
             await writeToClipboardWithHistory(fileRef, fileRef, store);
         }),
 
