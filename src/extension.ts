@@ -1,6 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getLineRange, buildSimpleRef, findInnermostSymbol, uniqueRefs, toRepoRelativePath } from './utils';
+import {
+    getLineRange,
+    buildSimpleRef,
+    findInnermostSymbol,
+    uniqueRefs,
+    toRepoRelativePath,
+    getSelectionEndLine,
+} from './utils';
 
 type RefFormat = 'simple' | 'github' | 'markdown-link';
 
@@ -164,7 +171,8 @@ export function activate(context: vscode.ExtensionContext): void {
                         seen.add(ref);
 
                         const ctxStart = Math.max(0, sel.start.line - contextLines);
-                        const ctxEnd = Math.min(lineCount - 1, sel.end.line + contextLines);
+                        const selectionEndLine = getSelectionEndLine(sel);
+                        const ctxEnd = Math.min(lineCount - 1, selectionEndLine + contextLines);
                         const code = editor.document.getText(
                             new vscode.Range(ctxStart, 0, ctxEnd, editor.document.lineAt(ctxEnd).text.length)
                         );

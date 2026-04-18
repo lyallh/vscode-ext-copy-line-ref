@@ -18,6 +18,13 @@ export interface LineRange {
     endLine: number;
 }
 
+/** Return the inclusive 0-based end line for the visible selection. */
+export function getSelectionEndLine(sel: SelectionLike): number {
+    return (sel.end.character === 0 && sel.end.line > sel.start.line)
+        ? sel.end.line - 1
+        : sel.end.line;
+}
+
 /**
  * Convert a VS Code Selection (0-based) to 1-based display line numbers.
  * Handles the triple-click edge case where the selection anchor lands at
@@ -25,9 +32,7 @@ export interface LineRange {
  */
 export function getLineRange(sel: SelectionLike): LineRange {
     const startLine = sel.start.line + 1;
-    const endLine = (sel.end.character === 0 && sel.end.line > sel.start.line)
-        ? sel.end.line          // exclusive boundary — already 1-based relative to start
-        : sel.end.line + 1;
+    const endLine = getSelectionEndLine(sel) + 1;
     return { startLine, endLine };
 }
 

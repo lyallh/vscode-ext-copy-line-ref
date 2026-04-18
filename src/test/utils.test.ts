@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    getSelectionEndLine,
     getLineRange,
     buildSimpleRef,
     findInnermostSymbol,
@@ -24,6 +25,24 @@ function sel(
 function sym(name: string, startLine: number, endLine: number, children: SymbolLike[] = []): SymbolLike {
     return { name, range: { start: { line: startLine }, end: { line: endLine } }, children };
 }
+
+// ---------------------------------------------------------------------------
+// getSelectionEndLine
+// ---------------------------------------------------------------------------
+
+describe('getSelectionEndLine', () => {
+    test('returns the current line for a cursor', () => {
+        assert.equal(getSelectionEndLine(sel(9, 5, 9, 5)), 9);
+    });
+
+    test('keeps the same line for a normal single-line selection', () => {
+        assert.equal(getSelectionEndLine(sel(9, 0, 9, 30)), 9);
+    });
+
+    test('uses the actual last selected line for a whole-line selection', () => {
+        assert.equal(getSelectionEndLine(sel(9, 0, 21, 0)), 20);
+    });
+});
 
 // ---------------------------------------------------------------------------
 // getLineRange
