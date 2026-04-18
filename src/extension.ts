@@ -1,35 +1,247 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import {
+    getLineRange,
+    buildSimpleRef,
+    buildGitHubBlobUrl,
+    findInnermostSymbol,
+    formatCopiedRef,
+    pickGitHubRemoteUrl,
+    pickContainingRepoRoot,
+    type RefFormat,
+    uniqueRefs,
+    toRepoRelativePath,
+    getSelectionEndLine,
+    updateHistory,
+} from './utils';
+
+interface FormatContext {
+    fileRef: string;
+    startLine: number;
+    endLine: number;
+    document: vscode.TextDocument;
+    symbol?: string;
+}
+
+function getConfig(): { format: RefFormat; includeSymbol: boolean; contextLines: number } {
+    const cfg = vscode.workspace.getConfiguration('copyLineRef');
+    const rawContextLines = cfg.get<number>('contextLines', 0);
+    return {
+        format: cfg.get<RefFormat>('format', 'simple'),
+        includeSymbol: cfg.get<boolean>('includeSymbol', false),
+        contextLines: Number.isFinite(rawContextLines)
+            ? Math.max(0, Math.floor(rawContextLines))
+            : 0,
+    };
+}
+
+function getGitHubUrl(document: vscode.TextDocument, startLine: number, endLine: number): string | null {
+    // Resolve the remote URL and HEAD commit from the built-in Git extension API if available.
+    const gitExt = vscode.extensions.getExtension('vscode.git');
+    if (!gitExt?.isActive) { return null; }
+    const git = gitExt.exports.getAPI(1);
+    const repoRoot = pickContainingRepoRoot(
+        git.repositories.map((r: { rootUri: vscode.Uri }) => r.rootUri.fsPath),
+        document.uri.fsPath
+    );
+    const repo = repoRoot
+        ? git.repositories.find((r: { rootUri: vscode.Uri }) => r.rootUri.fsPath === repoRoot)
+        : undefined;
+    if (!repo) { return null; }
+
+    const remoteUrl = pickGitHubRemoteUrl(repo.state.remotes);
+    const commit = repo.state.HEAD?.commit;
+    if (!remoteUrl || !commit) { return null; }
+
+    const relative = toRepoRelativePath(repo.rootUri.fsPath, document.uri.fsPath);
+    return buildGitHubBlobUrl(remoteUrl, commit, relative, startLine, endLine);
+}
+
+function formatRef({ fileRef, startLine, endLine, document, symbol }: FormatContext): string {
+    const { format } = getConfig();
+    const simple = buildSimpleRef(fileRef, startLine, endLine, symbol);
+    const githubUrl = format === 'github' ? getGitHubUrl(document, startLine, endLine) : null;
+    return formatCopiedRef(format, simple, fileRef, githubUrl);
+}
+
+function getFileRef(document: vscode.TextDocument): string {
+    // Include the workspace folder name when multiple roots are open to avoid
+    // ambiguous `src/...` references across different folders.
+    const includeWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 1;
+    const relative = vscode.workspace.asRelativePath(document.uri, includeWorkspace);
+    // asRelativePath returns the absolute path unchanged when the file is outside the workspace.
+    return relative === document.uri.fsPath
+        ? path.basename(document.fileName)
+        : relative;
+}
+
+function getLanguageId(document: vscode.TextDocument): string {
+    // Use VS Code's languageId directly — it matches common fenced-code-block identifiers.
+    return document.languageId === 'plaintext' ? '' : document.languageId;
+}
+
+async function resolveSymbol(document: vscode.TextDocument, line: number): Promise<string | undefined> {
+    const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        'vscode.executeDocumentSymbolProvider',
+        document.uri
+    );
+    if (!symbols?.length) { return undefined; }
+    return findInnermostSymbol(symbols, line)?.name;
+}
+
+const HISTORY_MAX = 50;
+
+let statusBarItem: vscode.StatusBarItem | undefined;
+let hideStatusBarTimer: ReturnType<typeof setTimeout> | undefined;
+
+function getStatusBar(): vscode.StatusBarItem {
+    if (!statusBarItem) {
+        statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+        statusBarItem.command = 'copyLineRef.recopyLast';
+        statusBarItem.tooltip = 'Click to copy again';
+    }
+    return statusBarItem;
+}
+
+function showStatusBar(label: string): void {
+    const bar = getStatusBar();
+    bar.text = `$(clippy) ${label}`;
+    bar.show();
+    // Auto-hide after 8s (longer than before since it's now interactive).
+    if (hideStatusBarTimer) {
+        clearTimeout(hideStatusBarTimer);
+    }
+    hideStatusBarTimer = setTimeout(() => {
+        bar.hide();
+        hideStatusBarTimer = undefined;
+    }, 8000);
+}
+
+async function writeToClipboardWithHistory(
+    text: string,
+    label: string,
+    historyStore: vscode.Memento
+): Promise<void> {
+    await vscode.env.clipboard.writeText(text);
+    showStatusBar(`Copied: ${label}`);
+
+    const history: string[] = historyStore.get<string[]>('history', []);
+    const updated = updateHistory(history, text, HISTORY_MAX);
+    await historyStore.update('history', updated);
+}
 
 export function activate(context: vscode.ExtensionContext): void {
-    const disposable = vscode.commands.registerCommand(
-        'copyLineRef.copyReference',
-        async () => {
+    const store = context.globalState;
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('copyLineRef.copyReference', async () => {
             const editor = vscode.window.activeTextEditor;
-            if (!editor) {
+            if (!editor) { return; }
+
+            const fileRef = getFileRef(editor.document);
+            const { includeSymbol } = getConfig();
+
+            const refs = uniqueRefs(
+                await Promise.all(
+                    editor.selections.map(async sel => {
+                        const { startLine, endLine } = getLineRange(sel);
+                        const symbol = includeSymbol
+                            ? await resolveSymbol(editor.document, sel.start.line)
+                            : undefined;
+                        return formatRef({ fileRef, startLine, endLine, document: editor.document, symbol });
+                    })
+                )
+            );
+            const reference = refs.join(', ');
+            await writeToClipboardWithHistory(reference, reference, store);
+        }),
+
+        vscode.commands.registerCommand('copyLineRef.copyReferenceWithCode', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) { return; }
+
+            const fileRef = getFileRef(editor.document);
+            const lang = getLanguageId(editor.document);
+            const { includeSymbol, contextLines } = getConfig();
+            const lineCount = editor.document.lineCount;
+
+            const seen = new Set<string>();
+            const blocks = (
+                await Promise.all(
+                    editor.selections.map(async sel => {
+                        const { startLine, endLine } = getLineRange(sel);
+                        const symbol = includeSymbol
+                            ? await resolveSymbol(editor.document, sel.start.line)
+                            : undefined;
+                        const ref = formatRef({ fileRef, startLine, endLine, document: editor.document, symbol });
+                        if (seen.has(ref)) { return null; }
+                        seen.add(ref);
+
+                        const ctxStart = Math.max(0, sel.start.line - contextLines);
+                        const selectionEndLine = getSelectionEndLine(sel);
+                        const ctxEnd = Math.min(lineCount - 1, selectionEndLine + contextLines);
+                        const code = editor.document.getText(
+                            new vscode.Range(ctxStart, 0, ctxEnd, editor.document.lineAt(ctxEnd).text.length)
+                        );
+                        return `${ref}\n\`\`\`${lang}\n${code}\n\`\`\``;
+                    })
+                )
+            ).filter((b): b is string => b !== null);
+
+            const output = blocks.join('\n\n');
+            const summary = blocks.length === 1
+                ? blocks[0].split('\n')[0]
+                : `${blocks.length} selections from ${fileRef}`;
+
+            await writeToClipboardWithHistory(output, summary, store);
+        }),
+
+        vscode.commands.registerCommand('copyLineRef.recopyLast', async () => {
+            const history = store.get<string[]>('history', []);
+            if (!history.length) { return; }
+            await vscode.env.clipboard.writeText(history[0]);
+            showStatusBar(`Re-copied: ${history[0].split('\n')[0]}`);
+        }),
+
+        vscode.commands.registerCommand('copyLineRef.copyFileReference', async (uri?: vscode.Uri) => {
+            const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
+            if (!targetUri) { return; }
+
+            const activeDocument = vscode.window.activeTextEditor?.document;
+            const document = activeDocument?.uri.toString() === targetUri.toString()
+                ? activeDocument
+                : await vscode.workspace.openTextDocument(targetUri);
+            const fileRef = getFileRef(document);
+            await writeToClipboardWithHistory(fileRef, fileRef, store);
+        }),
+
+        vscode.commands.registerCommand('copyLineRef.showHistory', async () => {
+            const history = store.get<string[]>('history', []);
+            if (!history.length) {
+                vscode.window.showInformationMessage('No copy-line-ref history yet.');
                 return;
             }
 
-            const fileName = path.basename(editor.document.fileName);
-            const sel = editor.selection;
-            const startLine = sel.start.line + 1;
+            const items = history.map(entry => {
+                const lines = entry.split('\n');
+                return { label: lines[0], detail: lines.length > 1 ? `${lines.length} lines` : undefined, entry };
+            });
 
-            // If selection ends at column 0 of a new line, that line wasn't
-            // visually selected — treat the end as the previous line.
-            const endLine = (sel.end.character === 0 && sel.end.line > sel.start.line)
-                ? sel.end.line
-                : sel.end.line + 1;
+            const picked = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a previous reference to copy again',
+                matchOnDetail: true,
+            });
+            if (!picked) { return; }
 
-            const reference = startLine === endLine
-                ? `${fileName}:${startLine}`
-                : `${fileName}:${startLine}-${endLine}`;
-
-            await vscode.env.clipboard.writeText(reference);
-            vscode.window.setStatusBarMessage(`Copied: ${reference}`, 3000);
-        }
+            await writeToClipboardWithHistory(picked.entry, picked.label, store);
+        })
     );
-
-    context.subscriptions.push(disposable);
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+    if (hideStatusBarTimer) {
+        clearTimeout(hideStatusBarTimer);
+        hideStatusBarTimer = undefined;
+    }
+    statusBarItem?.dispose();
+}

@@ -18,6 +18,26 @@
         "command": "copyLineRef.copyReference",
         "title": "Copy Line Reference",
         "category": "Editor"
+      },
+      {
+        "command": "copyLineRef.copyReferenceWithCode",
+        "title": "Copy Line Reference with Code",
+        "category": "Editor"
+      },
+      {
+        "command": "copyLineRef.showHistory",
+        "title": "Show Copy History",
+        "category": "Editor"
+      },
+      {
+        "command": "copyLineRef.copyFileReference",
+        "title": "Copy File Reference",
+        "category": "Editor"
+      },
+      {
+        "command": "copyLineRef.recopyLast",
+        "title": "Re-copy Last Reference",
+        "category": "Editor"
       }
     ],
     "keybindings": [
@@ -25,6 +45,12 @@
         "command": "copyLineRef.copyReference",
         "key": "ctrl+alt+c",
         "mac": "cmd+alt+c",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "copyLineRef.copyReferenceWithCode",
+        "key": "ctrl+alt+shift+c",
+        "mac": "cmd+alt+shift+c",
         "when": "editorTextFocus"
       }
     ],
@@ -34,8 +60,44 @@
           "command": "copyLineRef.copyReference",
           "when": "editorTextFocus",
           "group": "9_cutcopypaste"
+        },
+        {
+          "command": "copyLineRef.copyReferenceWithCode",
+          "when": "editorTextFocus",
+          "group": "9_cutcopypaste"
         }
       ]
+    },
+    "configuration": {
+      "title": "Copy Line Reference",
+      "properties": {
+        "copyLineRef.format": {
+          "type": "string",
+          "enum": [
+            "simple",
+            "github",
+            "markdown-link"
+          ],
+          "enumDescriptions": [
+            "src/main.ts:10-21",
+            "https://github.com/org/repo/blob/<commit>/src/main.ts#L10-L21  (prefers origin, falls back to simple if not a GitHub repo)",
+            "[src/main.ts:10-21](./src/main.ts)"
+          ],
+          "default": "simple",
+          "description": "Output format for copied line references."
+        },
+        "copyLineRef.includeSymbol": {
+          "type": "boolean",
+          "default": false,
+          "description": "Append the enclosing symbol name to the references, e.g. src/auth.ts:45::handleLogin. Ignored for GitHub URLs."
+        },
+        "copyLineRef.contextLines": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Number of extra lines to include above and below the selection in the code block (Copy Line Reference with Code only). The reference always reflects the exact selection."
+        }
+      }
     }
   },
   "scripts": {
@@ -43,6 +105,7 @@
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "typecheck": "tsc --noEmit",
+    "test": "node --require tsx/cjs --test src/test/utils.test.ts",
     "package": "vsce package",
     "lint": "eslint src"
   },
@@ -51,6 +114,7 @@
     "@types/node": "^22.0.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.0",
-    "@vscode/vsce": "^3.0.0"
+    "@vscode/vsce": "^3.0.0",
+    "tsx": "^4.19.0"
   }
 }

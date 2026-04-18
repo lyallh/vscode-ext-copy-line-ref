@@ -1,0 +1,405 @@
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+    buildGitHubBlobUrl,
+    getSelectionEndLine,
+    getLineRange,
+    buildSimpleRef,
+    findInnermostSymbol,
+    formatCopiedRef,
+    getGitHubRepoPath,
+    pickGitHubRemoteUrl,
+    pickContainingRepoRoot,
+    uniqueRefs,
+    updateHistory,
+    toRepoRelativePath,
+    type RefFormat,
+    type GitRemoteLike,
+    type SelectionLike,
+    type SymbolLike,
+} from '../utils';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function sel(
+    startLine: number, startChar: number,
+    endLine: number,   endChar: number
+): SelectionLike {
+    return { start: { line: startLine, character: startChar }, end: { line: endLine, character: endChar } };
+}
+
+function sym(name: string, startLine: number, endLine: number, children: SymbolLike[] = []): SymbolLike {
+    return { name, range: { start: { line: startLine }, end: { line: endLine } }, children };
+}
+
+// ---------------------------------------------------------------------------
+// getSelectionEndLine
+// ---------------------------------------------------------------------------
+
+describe('getSelectionEndLine', () => {
+    test('returns the current line for a cursor', () => {
+        assert.equal(getSelectionEndLine(sel(9, 5, 9, 5)), 9);
+    });
+
+    test('keeps the same line for a normal single-line selection', () => {
+        assert.equal(getSelectionEndLine(sel(9, 0, 9, 30)), 9);
+    });
+
+    test('uses the actual last selected line for a whole-line selection', () => {
+        assert.equal(getSelectionEndLine(sel(9, 0, 21, 0)), 20);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// getLineRange
+// ---------------------------------------------------------------------------
+
+describe('getLineRange', () => {
+    test('cursor with no selection returns current line (1-based)', () => {
+        const r = getLineRange(sel(9, 5, 9, 5));
+        assert.deepEqual(r, { startLine: 10, endLine: 10 });
+    });
+
+    test('single-line selection', () => {
+        const r = getLineRange(sel(9, 0, 9, 30));
+        assert.deepEqual(r, { startLine: 10, endLine: 10 });
+    });
+
+    test('multi-line selection', () => {
+        const r = getLineRange(sel(9, 0, 20, 15));
+        assert.deepEqual(r, { startLine: 10, endLine: 21 });
+    });
+
+    test('triple-click edge case: selection ends at col 0 of the line after last selected', () => {
+        // Selecting lines 9-20 by triple-clicking often places end at {line:21, char:0}.
+        // Line 21 (0-based) was NOT visually selected, so endLine should be 21 (1-based line 21).
+        const r = getLineRange(sel(9, 0, 21, 0));
+        assert.deepEqual(r, { startLine: 10, endLine: 21 });
+    });
+
+    test('col-0 edge case only fires when end line > start line', () => {
+        // Cursor at column 0, same line — must not subtract 1.
+        const r = getLineRange(sel(4, 0, 4, 0));
+        assert.deepEqual(r, { startLine: 5, endLine: 5 });
+    });
+
+    test('first line of file (0-based line 0)', () => {
+        const r = getLineRange(sel(0, 0, 0, 0));
+        assert.deepEqual(r, { startLine: 1, endLine: 1 });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// buildSimpleRef
+// ---------------------------------------------------------------------------
+
+describe('buildSimpleRef', () => {
+    test('single line', () => {
+        assert.equal(buildSimpleRef('src/foo.ts', 10, 10), 'src/foo.ts:10');
+    });
+
+    test('multi-line range', () => {
+        assert.equal(buildSimpleRef('src/foo.ts', 10, 21), 'src/foo.ts:10-21');
+    });
+
+    test('with symbol appended', () => {
+        assert.equal(buildSimpleRef('src/foo.ts', 45, 45, 'handleLogin'), 'src/foo.ts:45::handleLogin');
+    });
+
+    test('multi-line with symbol', () => {
+        assert.equal(buildSimpleRef('src/foo.ts', 10, 21, 'AuthService'), 'src/foo.ts:10-21::AuthService');
+    });
+
+    test('symbol undefined leaves no suffix', () => {
+        assert.equal(buildSimpleRef('src/foo.ts', 5, 5, undefined), 'src/foo.ts:5');
+    });
+
+    test('workspace-relative path is preserved verbatim', () => {
+        assert.equal(buildSimpleRef('src/auth/login.ts', 1, 1), 'src/auth/login.ts:1');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// formatCopiedRef
+// ---------------------------------------------------------------------------
+
+describe('formatCopiedRef', () => {
+    const fileRef = 'src/auth/login.ts';
+    const simpleRef = 'src/auth/login.ts:45-52::handleLogin';
+    const githubUrl = 'https://github.com/org/repo/blob/0123456789abcdef/src/auth/login.ts#L45-L52';
+
+    test('returns the simple reference for simple format', () => {
+        assert.equal(formatCopiedRef('simple', simpleRef, fileRef, githubUrl), simpleRef);
+    });
+
+    test('returns the GitHub URL unchanged for github format', () => {
+        assert.equal(formatCopiedRef('github', simpleRef, fileRef, githubUrl), githubUrl);
+    });
+
+    test('falls back to the simple reference when github url is unavailable', () => {
+        assert.equal(formatCopiedRef('github', simpleRef, fileRef, null), simpleRef);
+    });
+
+    test('returns a markdown link using the simple reference as label', () => {
+        assert.equal(
+            formatCopiedRef('markdown-link', simpleRef, fileRef, githubUrl),
+            '[src/auth/login.ts:45-52::handleLogin](./src/auth/login.ts)'
+        );
+    });
+
+    test('github format never appends the symbol suffix to the url fragment', () => {
+        const result = formatCopiedRef('github' satisfies RefFormat, simpleRef, fileRef, githubUrl);
+        assert.equal(result, githubUrl);
+        assert.ok(!result.includes('::'));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// GitHub URL helpers
+// ---------------------------------------------------------------------------
+
+describe('pickGitHubRemoteUrl', () => {
+    test('prefers the github remote named origin', () => {
+        const remotes: GitRemoteLike[] = [
+            { name: 'upstream', fetchUrl: 'git@github.com:org/upstream.git' },
+            { name: 'origin', fetchUrl: 'git@github.com:me/fork.git' },
+        ];
+        assert.equal(pickGitHubRemoteUrl(remotes), 'git@github.com:me/fork.git');
+    });
+
+    test('falls back to the first github remote when origin is missing', () => {
+        const remotes: GitRemoteLike[] = [
+            { name: 'mirror', fetchUrl: 'git@github.com:org/repo.git' },
+            { name: 'backup', fetchUrl: 'https://github.com/org/backup.git' },
+        ];
+        assert.equal(pickGitHubRemoteUrl(remotes), 'git@github.com:org/repo.git');
+    });
+
+    test('ignores non-github remotes when selecting a fetch url', () => {
+        const remotes: GitRemoteLike[] = [
+            { name: 'origin', fetchUrl: 'git@gitlab.com:org/repo.git' },
+            { name: 'github', fetchUrl: 'https://github.com/org/repo.git' },
+        ];
+        assert.equal(pickGitHubRemoteUrl(remotes), 'https://github.com/org/repo.git');
+    });
+
+    test('returns undefined when no github remote exists', () => {
+        const remotes: GitRemoteLike[] = [
+            { name: 'origin', fetchUrl: 'git@gitlab.com:org/repo.git' },
+        ];
+        assert.equal(pickGitHubRemoteUrl(remotes), undefined);
+    });
+});
+
+describe('getGitHubRepoPath', () => {
+    test('extracts owner and repo from ssh remotes', () => {
+        assert.equal(getGitHubRepoPath('git@github.com:org/repo.git'), 'org/repo');
+    });
+
+    test('extracts owner and repo from https remotes', () => {
+        assert.equal(getGitHubRepoPath('https://github.com/org/repo.git'), 'org/repo');
+    });
+
+    test('returns null for non-github remotes', () => {
+        assert.equal(getGitHubRepoPath('git@gitlab.com:org/repo.git'), null);
+    });
+});
+
+describe('buildGitHubBlobUrl', () => {
+    test('builds a blob url pinned to the commit sha', () => {
+        assert.equal(
+            buildGitHubBlobUrl(
+                'git@github.com:org/repo.git',
+                '0123456789abcdef',
+                'src/auth/login.ts',
+                45,
+                52
+            ),
+            'https://github.com/org/repo/blob/0123456789abcdef/src/auth/login.ts#L45-L52'
+        );
+    });
+
+    test('returns null for non-github remotes', () => {
+        assert.equal(
+            buildGitHubBlobUrl('git@gitlab.com:org/repo.git', '0123456789abcdef', 'src/auth/login.ts', 45, 45),
+            null
+        );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// findInnermostSymbol
+// ---------------------------------------------------------------------------
+
+describe('findInnermostSymbol', () => {
+    test('empty symbol list returns undefined', () => {
+        assert.equal(findInnermostSymbol([], 5), undefined);
+    });
+
+    test('line outside all symbols returns undefined', () => {
+        const symbols = [sym('foo', 0, 5), sym('bar', 10, 20)];
+        assert.equal(findInnermostSymbol(symbols, 7), undefined);
+    });
+
+    test('line inside a top-level symbol with no children', () => {
+        const symbols = [sym('foo', 0, 10)];
+        assert.equal(findInnermostSymbol(symbols, 5)?.name, 'foo');
+    });
+
+    test('line inside a nested child returns the child, not the parent', () => {
+        const child = sym('inner', 3, 7);
+        const parent = sym('outer', 0, 10, [child]);
+        assert.equal(findInnermostSymbol([parent], 5)?.name, 'inner');
+    });
+
+    test('line inside parent but outside child returns parent', () => {
+        const child = sym('inner', 3, 7);
+        const parent = sym('outer', 0, 10, [child]);
+        assert.equal(findInnermostSymbol([parent], 9)?.name, 'outer');
+    });
+
+    test('line on the start boundary of a symbol', () => {
+        const symbols = [sym('foo', 5, 15)];
+        assert.equal(findInnermostSymbol(symbols, 5)?.name, 'foo');
+    });
+
+    test('line on the end boundary of a symbol', () => {
+        const symbols = [sym('foo', 5, 15)];
+        assert.equal(findInnermostSymbol(symbols, 15)?.name, 'foo');
+    });
+
+    test('deeply nested: returns the innermost', () => {
+        const grandchild = sym('gc', 4, 5);
+        const child = sym('c', 2, 7, [grandchild]);
+        const parent = sym('p', 0, 10, [child]);
+        assert.equal(findInnermostSymbol([parent], 4)?.name, 'gc');
+    });
+
+    test('picks the correct symbol among siblings', () => {
+        const symbols = [sym('alpha', 0, 5), sym('beta', 6, 10)];
+        assert.equal(findInnermostSymbol(symbols, 8)?.name, 'beta');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// pickContainingRepoRoot
+// ---------------------------------------------------------------------------
+
+describe('pickContainingRepoRoot', () => {
+    test('returns undefined when no repo contains the file', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/repos/foo', '/repos/bar'], '/elsewhere/baz.ts', '/'),
+            undefined
+        );
+    });
+
+    test('does not confuse sibling repos that share a prefix', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/work/repo', '/work/repo-copy'], '/work/repo-copy/src/x.ts', '/'),
+            '/work/repo-copy'
+        );
+    });
+
+    test('picks the deepest matching nested repo root', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/a', '/a/b'], '/a/b/c.ts', '/'),
+            '/a/b'
+        );
+    });
+
+    test('treats exact equality as contained', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/repos/foo'], '/repos/foo', '/'),
+            '/repos/foo'
+        );
+    });
+
+    test('does not reject valid relative paths that start with dot segments in a filename', () => {
+        assert.equal(
+            pickContainingRepoRoot(['/repos/foo'], '/repos/foo/..bar/file.ts', '/'),
+            '/repos/foo'
+        );
+    });
+
+    test('handles Windows separators', () => {
+        assert.equal(
+            pickContainingRepoRoot(
+                ['C:\\work\\repo', 'C:\\work\\repo-copy'],
+                'C:\\work\\repo-copy\\src\\x.ts',
+                '\\'
+            ),
+            'C:\\work\\repo-copy'
+        );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// uniqueRefs
+// ---------------------------------------------------------------------------
+
+describe('uniqueRefs', () => {
+    test('no duplicates returns same contents in order', () => {
+        const refs = ['a:1', 'b:2', 'c:3'];
+        assert.deepEqual(uniqueRefs(refs), refs);
+    });
+
+    test('adjacent duplicates: keeps first', () => {
+        assert.deepEqual(uniqueRefs(['a:1', 'a:1', 'b:2']), ['a:1', 'b:2']);
+    });
+
+    test('non-adjacent duplicates: keeps first occurrence', () => {
+        assert.deepEqual(uniqueRefs(['a:1', 'b:2', 'a:1']), ['a:1', 'b:2']);
+    });
+
+    test('all duplicates: returns single entry', () => {
+        assert.deepEqual(uniqueRefs(['x:5', 'x:5', 'x:5']), ['x:5']);
+    });
+
+    test('empty array returns empty array', () => {
+        assert.deepEqual(uniqueRefs([]), []);
+    });
+
+    test('single entry returns single entry', () => {
+        assert.deepEqual(uniqueRefs(['src/main.ts:1']), ['src/main.ts:1']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// updateHistory
+// ---------------------------------------------------------------------------
+
+describe('updateHistory', () => {
+    test('prepends a new entry', () => {
+        assert.deepEqual(updateHistory(['b', 'c'], 'a', 50), ['a', 'b', 'c']);
+    });
+
+    test('moves an existing entry to the front', () => {
+        assert.deepEqual(updateHistory(['a', 'b', 'c'], 'b', 50), ['b', 'a', 'c']);
+    });
+
+    test('trims to the configured maximum size', () => {
+        assert.deepEqual(updateHistory(['b', 'c'], 'a', 2), ['a', 'b']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// toRepoRelativePath
+// ---------------------------------------------------------------------------
+
+describe('toRepoRelativePath', () => {
+    test('drops parent workspace segments before the git root', () => {
+        assert.equal(
+            toRepoRelativePath('/workspace/subrepo', '/workspace/subrepo/src/extension.ts'),
+            'src/extension.ts'
+        );
+    });
+
+    test('normalizes Windows separators for GitHub URLs', () => {
+        assert.equal(
+            toRepoRelativePath('C:\\workspace\\subrepo', 'C:\\workspace\\subrepo\\src\\extension.ts'),
+            'src/extension.ts'
+        );
+    });
+});
