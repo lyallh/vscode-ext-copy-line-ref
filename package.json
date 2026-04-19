@@ -9,6 +9,7 @@
     "url": "https://github.com/lyallh/vscode-ext-copy-line-ref.git"
   },
   "homepage": "https://github.com/lyallh/vscode-ext-copy-line-ref",
+  "packageManager": "pnpm@10.12.4",
   "bugs": {
     "url": "https://github.com/lyallh/vscode-ext-copy-line-ref/issues"
   },
@@ -17,7 +18,7 @@
     "README.md"
   ],
   "engines": {
-    "vscode": "^1.82.0"
+    "vscode": "^1.116.0"
   },
   "categories": [
     "Other"
@@ -116,16 +117,19 @@
     "vscode:prepublish": "node esbuild.js --production",
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
+    "check": "pnpm run lint && npm run typecheck",
+    "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "node --require tsx/cjs --test src/test/utils.test.ts",
-    "package": "vsce package --no-dependencies",
-    "lint": "eslint src"
+    "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
-    "@types/vscode": "^1.82.0",
-    "@types/node": "^22.0.0",
-    "esbuild": "^0.25.0",
-    "typescript": "^5.7.0",
+    "@types/vscode": "^1.116.0",
+    "@types/node": "22.x",
+    "esbuild": "^0.27.3",
+    "eslint": "^9.39.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1",
     "@vscode/vsce": "^3.0.0",
     "tsx": "^4.19.0"
   }

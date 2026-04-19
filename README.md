@@ -133,11 +133,11 @@ Typical session with an LLM agent:
 ## Building from source
 
 ```bash
-npm install
-npm run build       # produces dist/extension.js
-npm run typecheck   # type-check only, no output
-npm test            # run unit tests
-npm run package     # produce .vsix for local install
+pnpm install
+pnpm build          # produces dist/extension.js
+pnpm typecheck      # type-check only, no output
+pnpm test           # run unit tests
+pnpm package        # produce .vsix for local install
 ```
 
 Install a local build:
