@@ -72,12 +72,12 @@
         {
           "command": "copyLineRef.copyReference",
           "when": "editorTextFocus",
-          "group": "9_cutcopypaste"
+          "group": "9_cutcopypaste@99"
         },
         {
           "command": "copyLineRef.copyReferenceWithCode",
           "when": "editorTextFocus",
-          "group": "9_cutcopypaste"
+          "group": "9_cutcopypaste@100"
         }
       ]
     },
